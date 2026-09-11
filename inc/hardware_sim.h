@@ -1,0 +1,67 @@
+#ifndef HARDWARE_SIM_H
+#define HARDWARE_SIM_H
+
+#include <xc.h>
+
+#define BT0_PIN PORTBbits.RB4
+#define BT1_PIN PORTBbits.RB5
+#define BT2_PIN PORTBbits.RB6
+#define BT3_PIN PORTBbits.RB7
+
+#define TRIS_BT0 TRISBbits.TRISB4
+#define TRIS_BT1 TRISBbits.TRISB5
+#define TRIS_BT2 TRISBbits.TRISB6
+#define TRIS_BT3 TRISBbits.TRISB7
+
+#define SPI_SDO_PIN LATDbits.LATD4
+#define SPI_SCK_PIN LATDbits.LATD6
+#define TRIS_SPI_SDO TRISDbits.TRISD4
+#define TRIS_SPI_SCK TRISDbits.TRISD6
+
+#define SPI_BUF SSP2BUF
+#define SPI_STAT_BF SSP2STATbits.BF
+#define SPI_CON1 SSP2CON1
+#define SPI_STAT SSP2STAT
+
+#define LATCH_LED LATDbits.LATD5
+#define TRIS_LATCH_LED TRISDbits.TRISD5
+
+#define LATCH_7SEG LATDbits.LATD7
+#define TRIS_LATCH_7SEG TRISDbits.TRISD7
+
+#define LCD_DATA LATE
+#define TRIS_LCD_DATA TRISE
+
+#define LCD_RS LATFbits.LATF0
+#define TRIS_LCD_RS TRISFbits.TRISF0
+
+#define LCD_CSA LATFbits.LATF1
+#define TRIS_LCD_CSA TRISFbits.TRISF1
+
+#define LCD_CSB LATFbits.LATF2
+#define TRIS_LCD_CSB TRISFbits.TRISF2
+
+#define LCD_CSC LATFbits.LATF3
+#define TRIS_LCD_CSC TRISFbits.TRISF3
+
+#define GLCD_E LATFbits.LATF4
+#define TRIS_GLCD_E TRISFbits.TRISF4
+
+#define LCD_E LATFbits.LATF5
+#define TRIS_LCD_E TRISFbits.TRISF5
+
+#define RELAY_PIN LATFbits.LATF6
+#define TRIS_RELAY TRISFbits.TRISF6
+
+#define BUZZER_PIN LATFbits.LATF7
+#define TRIS_BUZZER TRISFbits.TRISF7
+
+#define SENSOR_HY860F_PIN PORTAbits.RA1
+#define TRIS_SENSOR_HY860F TRISAbits.TRISA1
+
+#define ENC_A_PIN PORTEbits.RE0
+#define ENC_B_PIN PORTEbits.RE1
+#define TRIS_ENC_A TRISEbits.TRISE0
+#define TRIS_ENC_B TRISEbits.TRISE1
+
+#endif

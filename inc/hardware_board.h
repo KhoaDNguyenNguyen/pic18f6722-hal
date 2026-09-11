@@ -1,0 +1,56 @@
+#ifndef HARDWARE_BOARD_H
+#define HARDWARE_BOARD_H
+
+#include <xc.h>
+
+#define BT0_PIN PORTBbits.RB6
+#define BT1_PIN PORTFbits.RF1
+#define BT2_PIN PORTBbits.RB4
+#define BT3_PIN PORTBbits.RB7
+
+#define TRIS_BT0 TRISBbits.TRISB6
+#define TRIS_BT1 TRISFbits.TRISF1
+#define TRIS_BT2 TRISBbits.TRISB4
+#define TRIS_BT3 TRISBbits.TRISB7
+
+#define MBI_OE_PIN  LATCbits.LATC5
+#define MBI_LE0_PIN LATBbits.LATB3
+#define MBI_LE1_PIN LATFbits.LATF6
+#define MBI_LE2_PIN LATFbits.LATF5
+#define MBI_LE3_PIN LATGbits.LATG4
+#define MBI_LE4_PIN LATFbits.LATF7
+#define MBI_LE5_PIN LATFbits.LATF4
+
+#define TRIS_MBI_OE  TRISCbits.TRISC5
+#define TRIS_MBI_LE0 TRISBbits.TRISB3
+#define TRIS_MBI_LE1 TRISFbits.TRISF6
+#define TRIS_MBI_LE2 TRISFbits.TRISF5
+#define TRIS_MBI_LE3 TRISGbits.TRISG4
+#define TRIS_MBI_LE4 TRISFbits.TRISF7
+#define TRIS_MBI_LE5 TRISFbits.TRISF4
+
+#define SPI_SDO_PIN LATDbits.LATD4
+#define SPI_SCK_PIN LATDbits.LATD6
+
+#define TRIS_SPI_SDO TRISDbits.TRISD4
+#define TRIS_SPI_SCK TRISDbits.TRISD6
+
+#define SPI_BUF SSP2BUF
+#define SPI_STAT_BF SSP2STATbits.BF
+#define SPI_CON1 SSP2CON1
+#define SPI_STAT SSP2STAT
+
+#define SENSOR_HY860F_PIN PORTAbits.RA4
+#define TRIS_SENSOR_HY860F TRISAbits.TRISA4
+
+#define KP_CK_PIN LATFbits.LATF3
+#define KP_DT_PIN PORTFbits.RF2
+#define TRIS_KP_CK TRISFbits.TRISF3
+#define TRIS_KP_DT TRISFbits.TRISF2
+
+#define ENC_A_PIN PORTEbits.RE0
+#define ENC_B_PIN PORTEbits.RE1
+#define TRIS_ENC_A TRISEbits.TRISE0
+#define TRIS_ENC_B TRISEbits.TRISE1
+
+#endif
