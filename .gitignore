@@ -1,0 +1,4 @@
+build/
+bak/
+temp.zsh
+flatten.py
