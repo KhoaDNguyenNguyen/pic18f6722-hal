@@ -20,5 +20,11 @@
 #include "timer.h"
 #include "counter.h"
 #include "test_suite.h"
-
+#include "easy_system.h"
+#include "easy_led32.h"
+#include "easy_led7.h"
+#include "easy_matrix.h"
+#include "easy_screen.h"
+#include "easy_input.h"
+#include "easy_actuator.h"
 #endif
