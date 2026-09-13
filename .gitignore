@@ -2,3 +2,5 @@ build/
 bak/
 temp.zsh
 flatten.py
+flattened_workspace/
+document/
