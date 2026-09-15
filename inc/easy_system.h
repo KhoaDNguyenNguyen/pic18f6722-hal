@@ -20,4 +20,5 @@ void Easy_System_Init(void);
  */
 void Easy_System_Run(void);
 
+bool Easy_System_GetBlink(uint32_t interval_ms);
 #endif

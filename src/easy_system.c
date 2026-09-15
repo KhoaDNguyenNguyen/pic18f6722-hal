@@ -25,3 +25,7 @@ void Easy_System_Run(void) {
     Easy_LED7_Task();
     Easy_Matrix_Task();
 }
+
+bool Easy_System_GetBlink(uint32_t interval_ms) {
+    return (Timer_GetMillis() % (interval_ms * 2)) < interval_ms;
+}
