@@ -1,3 +1,4 @@
+#warning "EASY_INPUT: Edge-triggered Global Debounce is ENABLED for Keypad & Buttons."
 #ifndef EASY_INPUT_H
 #define EASY_INPUT_H
 
