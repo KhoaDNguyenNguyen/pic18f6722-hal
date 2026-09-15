@@ -52,3 +52,12 @@ void Easy_GLCD_PrintFormat(uint8_t x, uint8_t y, const char* format, ...) {
     GLCD_SetCursor(y, x);
     GLCD_Print(buffer);
 }
+
+void Easy_LCD_CreateChar(uint8_t loc, const uint8_t* map) {
+    loc &= 0x07;
+    LCD_Command(0x40 | (loc << 3));
+    for(uint8_t i = 0; i < 8; i++) {
+        LCD_Data(map[i]);
+    }
+    LCD_Command(0x80);
+}

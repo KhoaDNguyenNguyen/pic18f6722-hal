@@ -51,4 +51,5 @@ void Easy_GLCD_ClearLine(uint8_t y);
  */
 void Easy_GLCD_PrintFormat(uint8_t x, uint8_t y, const char* format, ...);
 
+void Easy_LCD_CreateChar(uint8_t loc, const uint8_t* map);
 #endif
