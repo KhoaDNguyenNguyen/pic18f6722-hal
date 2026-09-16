@@ -1,6 +1,6 @@
 # PIC18F6722 Hardware Abstraction Layer
 
-A modular, C99-compliant Hardware Abstraction Layer (HAL) and Board Support Package (BSP) for the PIC18F6722 microcontroller training kit. Refactored from the legacy codebase by Nguyen Dinh Phu.
+A modular, C99-compliant Hardware Abstraction Layer (HAL) and Board Support Package (BSP) for the PIC18F6722 microcontroller training kit. Refactored from the original legacy codebase written by lecturer Nguyen Dinh Phu.
 
 ## Features
 
