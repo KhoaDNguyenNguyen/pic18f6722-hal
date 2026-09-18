@@ -28,4 +28,5 @@
 #include "easy_input.h"
 #include "easy_actuator.h"
 #include "easy_rtc.h"
+#include "easy_oled.h"
 #endif
