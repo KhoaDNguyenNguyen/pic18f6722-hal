@@ -12,3 +12,5 @@ void LCD_PrintPad2(uint8_t val);
 void LCD_PrintTime(uint8_t h, uint8_t m, uint8_t s);
 
 #endif
+void LCD_Command(uint8_t cmd);
+void LCD_Data(uint8_t data);

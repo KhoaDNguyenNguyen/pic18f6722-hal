@@ -4,7 +4,7 @@
 
 #ifdef TARGET_SIMULATION
 
-static void LCD_Command(uint8_t cmd) {
+void LCD_Command(uint8_t cmd) {
     LCD_RS = 0;
     LCD_DATA = cmd;
     LCD_E = 1;
@@ -14,7 +14,7 @@ static void LCD_Command(uint8_t cmd) {
     else __delay_us(50);
 }
 
-static void LCD_Data(uint8_t data) {
+void LCD_Data(uint8_t data) {
     LCD_RS = 1;
     LCD_DATA = data;
     LCD_E = 1;
@@ -108,8 +108,8 @@ static void LCD_Send(uint8_t rs, uint8_t data) {
     __delay_us(50);
 }
 
-static void LCD_Command(uint8_t cmd) { LCD_Send(0x00, cmd); }
-static void LCD_Data(uint8_t data) { LCD_Send(0x01, data); }
+void LCD_Command(uint8_t cmd) { LCD_Send(0x00, cmd); }
+void LCD_Data(uint8_t data) { LCD_Send(0x01, data); }
 
 void LCD_Init(void) {
     __delay_ms(50);

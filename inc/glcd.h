@@ -10,3 +10,5 @@ void GLCD_Print(const char* str);
 void GLCD_PrintInt(int32_t val);
 
 #endif
+void GLCD_Command(uint8_t cmd);
+void GLCD_Data(uint8_t data);
