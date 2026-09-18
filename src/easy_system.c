@@ -17,6 +17,7 @@ void Easy_System_Init(void) {
     LED32_Init();
     LEDMatrix_Init();
     RotaryEncoder_Init();
+    Easy_RTC_Init();
 }
 
 void Easy_System_Run(void) {

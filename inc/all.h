@@ -27,4 +27,5 @@
 #include "easy_screen.h"
 #include "easy_input.h"
 #include "easy_actuator.h"
+#include "easy_rtc.h"
 #endif
