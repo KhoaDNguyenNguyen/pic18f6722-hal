@@ -52,3 +52,7 @@ void Easy_GLCD_ClearLine(uint8_t y);
 void Easy_GLCD_PrintFormat(uint8_t x, uint8_t y, const char* format, ...);
 
 #endif
+void Easy_LCD_InitBigNumbers(void);
+void Easy_LCD_PrintBigNum(uint8_t x, uint8_t y, uint8_t val);
+void Easy_GLCD_GraphicMode(uint8_t enable);
+void Easy_GLCD_DrawCheckerboard(void);
