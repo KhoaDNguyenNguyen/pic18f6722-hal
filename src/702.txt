@@ -1,0 +1,76 @@
+#include "all.h"
+
+// int main(void) {
+//     Easy_System_Init();
+
+//     Easy_Buzzer_Set(false);
+//     Easy_Triac1_Set(false);
+
+//     while (1) {
+//         Easy_System_Run();
+//         if (Easy_Button_IsClicked(0)) {
+//             Easy_Buzzer_Set(true);
+//             // Easy_Triac1_Set(true);
+//             Easy_Triac1_Set(true);
+//         }
+
+//         if (Easy_Button_IsClicked(1)) {
+//             Easy_Buzzer_Set(false);
+//             // Easy_Triac1_Set(false);
+//             Easy_Triac1_Set(false);
+//         }
+//     }
+
+//     return 0;
+// }
+
+
+int main(void) {
+    Easy_System_Init();
+    Easy_LCD_InitBigNumbers();
+    Easy_Buzzer_Set(false);
+    Easy_Triac1_Set(false);
+    uint32_t t_cap_nhat = 0;
+    Easy_LCD_PrintString(17, 2, ".");
+    Easy_LCD_PrintString(15, 0, "LM35B");
+    bool is_muted = false;
+
+    while(1) {
+        Easy_System_Run();
+        if (Easy_Button_IsClicked(3)){
+            Easy_Buzzer_Set(false);
+            is_muted = true;
+            }
+
+        if (Timer_GetMillis() - t_cap_nhat >= 300){
+            t_cap_nhat = Timer_GetMillis();
+        float temp_float = Easy_LM35_Read(ADC_CH_LM35B, 25);
+        
+        int16_t temp_int = (int16_t)temp_float;
+        int16_t phan_thap_phan = (int16_t)(temp_float * 100.0f) % 10; // 2 so sau dau phay
+        // LED7_PrintNumAt(3, temp_int);
+        
+        Easy_LED7_SetChar(3, '0'+(temp_int/10));
+        Easy_LED7_SetChar(2, '0'+(temp_int%10));
+        Easy_LCD_PrintBigNum(10, 1, (temp_int/10)); 
+        Easy_LCD_PrintBigNum(14, 1, temp_int%10);
+        Easy_LCD_PrintFormat(18, 2, "%02d", phan_thap_phan);
+
+
+        if (temp_float > 32.f){
+            Easy_Triac1_Set(false);
+        }
+        else if (temp_float < 29.f){
+            Easy_Triac1_Set(true);
+        }
+        
+        if (temp_float > 32.f){
+            if (!is_muted) Easy_Buzzer_Set(true);
+        }
+        else{
+            Easy_Buzzer_Set(false);
+            is_muted = false;
+        }
+}
+    }
+}

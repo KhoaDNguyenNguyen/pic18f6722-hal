@@ -1,0 +1,122 @@
+#include "all.h"
+typedef enum {
+    MODE_POWER_ON,     
+    MODE_ANIMATING,    
+    MODE_HALTED        
+} SystemMode;
+
+int main(void) {
+
+    Easy_System_Init();
+
+    SystemMode current_mode = MODE_POWER_ON;
+
+    uint32_t last_sec_tick = 0;
+    uint8_t hours = 0, minutes = 0, seconds = 0;
+    
+
+    uint32_t last_anim_tick = 0;
+    uint8_t anim_step = 0;      
+    uint8_t loop_count = 0;     
+    uint8_t anim_dir = 0;     
+
+    uint8_t bt1_presses = 0;   
+
+    LED32_SetState(0xFFFFFFFF); 
+    Easy_LCD_PrintString(0, 0, "Ng Ng Dang Khoa");
+    Easy_LCD_PrintFormat(0, 1, "%02d:%02d:%02d", hours, minutes, seconds);
+    Easy_LCD_PrintFormat(0, 3, "solan %02d", bt1_presses);
+
+
+    while (1) {
+
+        Easy_System_Run(); 
+        
+        uint32_t current_time = Timer_GetMillis();
+        if (Easy_Button_IsClicked(2)) {
+            current_mode = MODE_HALTED;
+            LED32_SetState(0x00000000);
+            LCD_Clear();                
+            
+            while (1) {
+
+                Easy_System_Run(); 
+            }
+        }
+        if (current_time - last_sec_tick >= 1000) {
+            last_sec_tick = current_time;
+            seconds++;
+            if (seconds >= 60) {
+                seconds = 0;
+                minutes++;
+                if (minutes >= 60) {
+                    minutes = 0;
+                    hours++;
+                    if (hours >= 24) hours = 0;
+                }
+            }
+            Easy_LCD_PrintFormat(0, 1, "%02d:%02d:%02d", hours, minutes, seconds);
+        }
+
+        if (current_mode == MODE_POWER_ON) {
+            LED32_SetState(0xFFFFFFFF);
+
+            if (Easy_Button_IsClicked(0)) {
+                current_mode = MODE_ANIMATING;
+                anim_step = 0;
+                loop_count = 0;
+                anim_dir = 0; 
+                last_anim_tick = current_time;
+            }
+        } 
+        else if (current_mode == MODE_ANIMATING) {
+
+            if (Easy_Button_IsClicked(1) || Easy_Button_IsClicked(3) ) {
+                bt1_presses++;
+                Easy_LCD_PrintFormat(0, 3, "solan %02d", bt1_presses); 
+                
+                anim_dir = !anim_dir; 
+                loop_count = 0;      
+            }
+
+
+            if (current_time - last_anim_tick >= 30) {
+                last_anim_tick = current_time;
+                
+                uint8_t fill_amount = 0;
+                uint32_t mask = 0;
+
+                if (anim_step <= 32) {
+                    fill_amount = anim_step;           
+                } else {
+                    fill_amount = 64 - anim_step;    
+                }
+                if (fill_amount == 0) {
+                    mask = 0x00000000;
+                } else if (fill_amount == 32) {
+                    mask = 0xFFFFFFFF;
+                } else {
+                    if (anim_dir == 0) {
+ 
+                        mask = (1UL << fill_amount) - 1; 
+                    } else {
+
+                        mask = 0xFFFFFFFF << (32 - fill_amount);
+                    }
+                }
+                
+                LED32_SetState(mask);
+
+                anim_step++;
+                if (anim_step > 64) {
+                    anim_step = 0; 
+                    loop_count++;
+                    if (loop_count >= 5) {
+                        current_mode = MODE_POWER_ON;
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}

@@ -1,0 +1,86 @@
+#include "all.h"
+#define LOWER_BOUND 30
+#define UPPER_BOUND 31.5
+// int main(void) {
+//     Easy_System_Init();
+
+//     Easy_Buzzer_Set(false);
+//     Easy_Triac1_Set(false);
+
+//     while (1) {
+//         Easy_System_Run();
+//         if (Easy_Button_IsClicked(0)) {
+//             Easy_Buzzer_Set(true);
+//             // Easy_Triac1_Set(true);
+//             Easy_Triac1_Set(true);
+//         }
+
+//         if (Easy_Button_IsClicked(1)) {
+//             Easy_Buzzer_Set(false);
+//             // Easy_Triac1_Set(false);
+//             Easy_Triac1_Set(false);
+//         }
+//     }
+
+//     return 0;
+// }
+
+
+int main(void) {
+    Easy_System_Init();
+    Easy_LCD_InitBigNumbers();
+    Easy_Buzzer_Set(false);
+    Easy_Triac1_Set(false);
+    uint32_t t_cap_nhat = 0;
+    Easy_LCD_PrintString(17, 2, ".");
+    Easy_LCD_PrintString(15, 0, "LM35B");
+    bool is_muted = false;
+
+    while(1) {
+        Easy_System_Run();
+        if (Easy_Button_IsClicked(3)){
+            Easy_Buzzer_Set(false);
+            is_muted = true;
+            }
+
+        if (Timer_GetMillis() - t_cap_nhat >= 300){
+            t_cap_nhat = Timer_GetMillis();
+        float temp_floatA = Easy_LM35_Read(ADC_CH_LM35A, 20);
+        float temp_floatB = Easy_LM35_Read(ADC_CH_LM35B, 20);
+        int16_t temp_intA = (int16_t)temp_floatA;
+        int16_t phan_thap_phanA = (int16_t)(temp_floatA * 100.0f) % 100; // 2 so sau dau phay
+        int16_t temp_intB = (int16_t)temp_floatB;
+        int16_t phan_thap_phanB = (int16_t)(temp_floatB * 100.0f) % 100; // 2 so sau dau phay
+
+        float temp_float = 0.5 * (temp_floatA + temp_floatB);
+        int16_t temp_int = (int16_t)temp_float;
+        int16_t phan_thap_phan = (int16_t)(temp_float * 100.0f) % 100; // 2 so sau dau phay
+        // LED7_PrintNumAt(3, temp_int);
+        
+        Easy_LED7_SetChar(3, '0'+(temp_int/10));
+        Easy_LED7_SetChar(2, '0'+(temp_int%10));
+        Easy_LCD_PrintBigNum(10, 1, (temp_int/10)); 
+        Easy_LCD_PrintBigNum(14, 1, temp_int%10);
+        Easy_LCD_PrintFormat(18, 2, "%02d", phan_thap_phan);
+        Easy_LCD_PrintFormat(0, 3, "T1: %.02f", temp_floatA);
+        Easy_LCD_PrintFormat(11, 3, "T2: %.02f", temp_floatB);
+        // Easy_LCD_PrintFormat(10, 3, "Temp1: %02f", temp_floatB);
+
+
+        if ((temp_floatA > UPPER_BOUND) && (temp_floatB > UPPER_BOUND)){
+            Easy_Triac1_Set(false);
+        }
+        else if ((temp_floatA < LOWER_BOUND) && (temp_floatB < LOWER_BOUND)){
+            Easy_Triac1_Set(true);
+        }
+        
+        if ((temp_floatA > UPPER_BOUND) && (temp_floatB > UPPER_BOUND)){
+            // if (!is_muted) Easy_Buzzer_Set(true);
+        }
+        else{
+            Easy_Buzzer_Set(false);
+            is_muted = false;
+        }
+}
+    }
+}
