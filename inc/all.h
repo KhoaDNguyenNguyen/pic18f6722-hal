@@ -20,6 +20,11 @@
 #include "timer.h"
 #include "counter.h"
 #include "test_suite.h"
+
+#include "dc_motor.h"
+#include "step_motor.h"
+#include "servo.h"
+
 #include "easy_system.h"
 #include "easy_led32.h"
 #include "easy_led7.h"
@@ -32,5 +37,7 @@
 #include "easy_adc.h"
 #include "easy_distance.h"
 #include "easy_dht.h"     
-#include "easy_weight.h"  
+#include "easy_weight.h"
+#include "easy_motor.h"
+
 #endif

@@ -2,6 +2,7 @@
 #include "easy_led32.h"
 #include "easy_led7.h"
 #include "easy_matrix.h"
+#include "easy_motor.h"
 #include "all.h"
 
 void Easy_System_Init(void) {
@@ -19,6 +20,11 @@ void Easy_System_Init(void) {
     RotaryEncoder_Init();
     Easy_RTC_Init();
     Easy_OLED_Init();
+    Easy_ADC_Init();
+    Easy_Distance_Init();
+    DCMotor_Init();
+    StepMotor_Init();
+    Servo_Init();
 }
 
 void Easy_System_Run(void) {
@@ -26,4 +32,5 @@ void Easy_System_Run(void) {
     Easy_LED32_Task();
     Easy_LED7_Task();
     Easy_Matrix_Task();
+    Easy_StepMotor_Task();
 }
