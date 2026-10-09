@@ -18,6 +18,10 @@ void Easy_DCMotor_Coast(void) {
     DCMotor_Coast();
 }
 
+void Easy_DCMotor_Brake(void) {
+    DCMotor_Brake();
+}
+
 void Easy_StepMotor_Run(bool forward, uint32_t rpm) {
     if (rpm == 0) {
         Easy_StepMotor_Stop();
@@ -47,5 +51,5 @@ void Easy_StepMotor_Task(void) {
 }
 
 void Easy_Servo_SetAngle(uint8_t angle) {
-    Servo_Pulse(angle);
+    Servo_SetAngle(angle);
 }
