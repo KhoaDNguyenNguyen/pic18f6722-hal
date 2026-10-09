@@ -5,5 +5,6 @@
 
 void DCMotor_Init(void);
 void DCMotor_SetPWM(int16_t duty);
+void DCMotor_Coast(void);
 
 #endif

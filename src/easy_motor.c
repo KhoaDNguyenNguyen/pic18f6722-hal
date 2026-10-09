@@ -14,6 +14,10 @@ void Easy_DCMotor_SetPWM(int16_t duty) {
     DCMotor_SetPWM(duty);
 }
 
+void Easy_DCMotor_Coast(void) {
+    DCMotor_Coast();
+}
+
 void Easy_StepMotor_Run(bool forward, uint32_t rpm) {
     if (rpm == 0) {
         Easy_StepMotor_Stop();
