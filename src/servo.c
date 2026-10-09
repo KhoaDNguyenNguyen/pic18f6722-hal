@@ -23,13 +23,17 @@ void Servo_Task(void) {
     if (now - last_pulse_time >= 20) {
         last_pulse_time = now;
         
-        Actuator_SetBit(6, true);
-        
         uint16_t loops = 100 + ((uint32_t)current_angle * 100) / 180; 
+        
+        uint8_t gie_state = INTCONbits.GIE;
+        INTCONbits.GIE = 0;
+        
+        Actuator_SetBit(6, true);
         for (uint16_t i = 0; i < loops; i++) {
             __delay_us(10);
         }
-        
         Actuator_SetBit(6, false);
+        
+        INTCONbits.GIE = gie_state;
     }
 }
