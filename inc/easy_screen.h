@@ -56,3 +56,12 @@ void Easy_LCD_InitBigNumbers(void);
 void Easy_LCD_PrintBigNum(uint8_t x, uint8_t y, uint8_t val);
 void Easy_GLCD_GraphicMode(uint8_t enable);
 void Easy_GLCD_DrawCheckerboard(void);
+
+/**
+ * @brief Loads a custom 5x8 icon into LCD CGRAM (0-7).
+ */
+void Easy_LCD_LoadCustomChar(uint8_t loc, const uint8_t* charmap);
+
+void Easy_LCD_LoadLargeIcon(uint8_t start_loc, const uint8_t* icon_data);
+void Easy_LCD_PrintLargeIcon(uint8_t x, uint8_t y, uint8_t start_loc);
+

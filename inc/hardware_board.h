@@ -3,6 +3,11 @@
 
 #include <xc.h>
 
+#define HCSR04_TRIG_PIN LATCbits.LATC1
+#define HCSR04_ECHO_PIN PORTCbits.RC2
+#define TRIS_HCSR04_TRIG TRISCbits.TRISC1
+#define TRIS_HCSR04_ECHO TRISCbits.TRISC2
+
 #define BT0_PIN PORTBbits.RB6
 #define BT1_PIN PORTFbits.RF1
 #define BT2_PIN PORTBbits.RB4
@@ -52,5 +57,9 @@
 #define ENC_B_PIN PORTEbits.RE1
 #define TRIS_ENC_A TRISEbits.TRISE0
 #define TRIS_ENC_B TRISEbits.TRISE1
+
+#define DHT11_LAT        LATGbits.LATG3
+#define DHT11_PIN        PORTGbits.RG3
+#define TRIS_DHT11       TRISGbits.TRISG3
 
 #endif

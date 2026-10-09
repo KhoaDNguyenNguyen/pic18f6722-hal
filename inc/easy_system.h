@@ -19,5 +19,4 @@ void Easy_System_Init(void);
  * It handles the LED matrix scanning and all non-blocking animations automatically.
  */
 void Easy_System_Run(void);
-
 #endif

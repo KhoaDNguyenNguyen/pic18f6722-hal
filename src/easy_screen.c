@@ -52,6 +52,7 @@ void Easy_GLCD_PrintFormat(uint8_t x, uint8_t y, const char* format, ...) {
     GLCD_SetCursor(y, x);
     GLCD_Print(buffer);
 }
+
 #include "lcd.h"
 #include "glcd.h"
 
@@ -120,4 +121,30 @@ void Easy_GLCD_DrawCheckerboard(void) {
             GLCD_Data((y % 2) ? pat2 : pat1);
         }
     }
+}
+
+void Easy_LCD_LoadCustomChar(uint8_t loc, const uint8_t* charmap) {
+    loc &= 0x07;
+    LCD_Command((uint8_t)(0x40 | (loc << 3)));
+    for (uint8_t i = 0; i < 8; i++) {
+        LCD_Data(charmap[i]);
+    }
+    LCD_Command(0x80);
+}
+
+void Easy_LCD_LoadLargeIcon(uint8_t start_loc, const uint8_t* icon_data) {
+    if (start_loc > 4) return; 
+    for (uint8_t i = 0; i < 4; i++) {
+        Easy_LCD_LoadCustomChar((uint8_t)(start_loc + i), &icon_data[i * 8]);
+    }
+}
+
+void Easy_LCD_PrintLargeIcon(uint8_t x, uint8_t y, uint8_t start_loc) {
+    if (y > 2 || start_loc > 4) return;
+    LCD_SetCursor(y, x);
+    LCD_Data(start_loc);
+    LCD_Data((uint8_t)(start_loc + 1));
+    LCD_SetCursor((uint8_t)(y + 1), x);
+    LCD_Data((uint8_t)(start_loc + 2));
+    LCD_Data((uint8_t)(start_loc + 3));
 }
