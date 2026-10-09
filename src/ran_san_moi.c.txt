@@ -1,0 +1,304 @@
+#include "all.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define SCREEN_W     128
+#define SCREEN_H     64
+#define GROUND_Y     52
+
+#define COW_X        16
+#define COW_W        14
+#define COW_H        13
+#define COW_DUCK_H   6
+
+#define OBS_FENCE    0
+#define OBS_PLANE_LO 1
+#define OBS_PLANE_HI 2
+
+typedef struct {
+    int16_t x;
+    int16_t y;
+    uint8_t type;
+    uint8_t w;
+    uint8_t h;
+    bool active;
+} Obstacle_t;
+
+static uint8_t fb[1024];
+
+static int16_t cow_y = 0;
+static int16_t cow_vy = 0;
+static bool is_ducking = false;
+static bool on_ground = true;
+static uint8_t anim_tick = 0;
+
+static Obstacle_t obs;
+static uint16_t score = 0;
+static uint16_t best_score = 0;
+static bool is_game_over = false;
+static uint8_t game_speed = 3;
+
+static void fb_clear(void) {
+    memset(fb, 0, sizeof(fb));
+}
+
+static void fb_pixel(int16_t x, int16_t y, uint8_t c) {
+    if (x < 0 || x >= SCREEN_W || y < 0 || y >= SCREEN_H) return;
+    uint16_t idx = (uint16_t)y * 16 + ((uint16_t)x >> 3);
+    uint8_t mask = (uint8_t)(0x80 >> (x & 7));
+    if (c) fb[idx] |= mask;
+    else   fb[idx] &= ~mask;
+}
+
+static void fb_line_h(int16_t x1, int16_t x2, int16_t y, uint8_t c) {
+    if (y < 0 || y >= SCREEN_H) return;
+    if (x1 > x2) { int16_t t = x1; x1 = x2; x2 = t; }
+    if (x1 < 0) x1 = 0;
+    if (x2 >= SCREEN_W) x2 = SCREEN_W - 1;
+    for (int16_t x = x1; x <= x2; x++) fb_pixel(x, y, c);
+}
+
+static void fb_line_v(int16_t x, int16_t y1, int16_t y2, uint8_t c) {
+    if (x < 0 || x >= SCREEN_W) return;
+    if (y1 > y2) { int16_t t = y1; y1 = y2; y2 = t; }
+    if (y1 < 0) y1 = 0;
+    if (y2 >= SCREEN_H) y2 = SCREEN_H - 1;
+    for (int16_t y = y1; y <= y2; y++) fb_pixel(x, y, c);
+}
+
+static void fb_fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t c) {
+    for (int16_t r = y; r < y + h; r++) {
+        fb_line_h(x, x + w - 1, r, c);
+    }
+}
+
+static void beep(uint8_t ms) {
+    Buzzer_Set(true);
+    for (uint8_t i = 0; i < ms; i++) {
+        __delay_ms(1);
+    }
+    Buzzer_Set(false);
+}
+
+static void spawn_obstacle(void) {
+    obs.x = SCREEN_W + (int16_t)(rand() % 30);
+    obs.active = true;
+
+    uint8_t roll = rand() % 10;
+    if (score > 120 && roll < 4) {
+        obs.type = OBS_PLANE_HI;
+        obs.w = 14;
+        obs.h = 6;
+        obs.y = GROUND_Y - 11;
+    } else if (score > 60 && roll < 7) {
+        obs.type = OBS_PLANE_LO;
+        obs.w = 14;
+        obs.h = 6;
+        obs.y = GROUND_Y - 6;
+    } else {
+        obs.type = OBS_FENCE;
+        obs.w = 7;
+        obs.h = 10;
+        obs.y = GROUND_Y - obs.h;
+    }
+}
+
+static void reset_game(void) {
+    cow_y = 0;
+    cow_vy = 0;
+    is_ducking = false;
+    on_ground = true;
+    score = 0;
+    game_speed = 3;
+    is_game_over = false;
+
+    spawn_obstacle();
+
+    Easy_Matrix_Print("COW", 2);
+    Easy_LCD_ClearLine(0);
+    Easy_LCD_ClearLine(1);
+    Easy_LCD_ClearLine(2);
+    Easy_LCD_ClearLine(3);
+    Easy_LCD_PrintString(0, 0, "COW RUN");
+    Easy_LCD_PrintFormat(0, 1, "SCORE: %d", score);
+    Easy_LCD_PrintFormat(0, 2, "BEST:  %d", best_score);
+    Easy_LCD_PrintString(0, 3, "SPD: 1");
+}
+
+static void draw_cow(int16_t base_x, int16_t base_y, bool duck, uint8_t tick) {
+    if (duck && on_ground) {
+        fb_fill_rect(base_x, base_y - 6, 12, 5, 1);
+        fb_fill_rect(base_x + 10, base_y - 7, 5, 4, 1);
+        fb_pixel(base_x + 12, base_y - 8, 1);
+        fb_pixel(base_x + 13, base_y - 6, 0);
+        fb_pixel(base_x + 4, base_y - 4, 0);
+        if (tick & 1) {
+            fb_line_h(base_x + 2, base_x + 5, base_y - 1, 1);
+        } else {
+            fb_line_h(base_x + 7, base_x + 10, base_y - 1, 1);
+        }
+    } else {
+        int16_t top_y = base_y - COW_H;
+        fb_fill_rect(base_x + 2, top_y + 4, 9, 6, 1);
+        fb_pixel(base_x + 5, top_y + 6, 0);
+        fb_pixel(base_x, top_y + 5, 1);
+
+        fb_fill_rect(base_x + 9, top_y, 5, 5, 1);
+        fb_pixel(base_x + 10, top_y - 1, 1);
+        fb_pixel(base_x + 12, top_y - 1, 1);
+        fb_pixel(base_x + 12, top_y + 2, 0);
+
+        if (on_ground) {
+            if (tick & 1) {
+                fb_line_v(base_x + 3, top_y + 10, base_y - 1, 1);
+                fb_line_v(base_x + 8, top_y + 10, base_y - 2, 1);
+            } else {
+                fb_line_v(base_x + 3, top_y + 10, base_y - 2, 1);
+                fb_line_v(base_x + 8, top_y + 10, base_y - 1, 1);
+            }
+        } else {
+            fb_line_v(base_x + 3, top_y + 10, base_y - 2, 1);
+            fb_line_v(base_x + 8, top_y + 10, base_y - 2, 1);
+        }
+    }
+}
+
+static void draw_obstacle(void) {
+    if (!obs.active) return;
+
+    if (obs.type == OBS_FENCE) {
+        fb_line_v(obs.x + 1, obs.y, GROUND_Y - 1, 1);
+        fb_line_v(obs.x + 5, obs.y, GROUND_Y - 1, 1);
+        fb_line_h(obs.x, obs.x + 6, obs.y + 2, 1);
+        fb_line_h(obs.x, obs.x + 6, obs.y + 6, 1);
+    } else {
+        fb_line_h(obs.x, obs.x + 12, obs.y + 2, 1);
+        fb_line_h(obs.x + 1, obs.x + 10, obs.y + 3, 1);
+        fb_line_v(obs.x + 5, obs.y, obs.y + 4, 1);
+        fb_line_v(obs.x + 11, obs.y + 1, obs.y + 3, 1);
+        fb_pixel(obs.x + 2, obs.y + 2, 0);
+    }
+}
+
+static bool check_collision(void) {
+    if (!obs.active) return false;
+
+    int16_t c_x = COW_X;
+    int16_t c_y = GROUND_Y - cow_y;
+    int16_t c_w = (is_ducking && on_ground) ? 15 : COW_W;
+    int16_t c_h = (is_ducking && on_ground) ? COW_DUCK_H : COW_H;
+    int16_t c_top = c_y - c_h;
+
+    int16_t o_left = obs.x;
+    int16_t o_right = obs.x + obs.w;
+    int16_t o_top = obs.y;
+    int16_t o_bottom = obs.y + obs.h;
+
+    if ((c_x + c_w > o_left) && (c_x < o_right)) {
+        if ((c_y > o_top) && (c_top < o_bottom)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void read_inputs(void) {
+    bool b0 = Button_GetState(BTN_0);
+    bool b1 = Button_GetState(BTN_1);
+    uint16_t jy = Easy_ADC_ReadRaw(ADC_CH_JOY_Y, 1);
+
+    bool req_jump = b0 || (jy < 280);
+    bool req_duck = b1 || (jy > 740);
+
+    if (req_jump && on_ground) {
+        cow_vy = 6;
+        on_ground = false;
+        beep(5);
+    }
+
+    is_ducking = req_duck;
+}
+
+static void update_physics(void) {
+    if (!on_ground) {
+        cow_y += cow_vy;
+        cow_vy -= 1;
+        if (cow_y <= 0) {
+            cow_y = 0;
+            cow_vy = 0;
+            on_ground = true;
+        }
+    }
+
+    obs.x -= game_speed;
+    if (obs.x < -16) {
+        spawn_obstacle();
+    }
+
+    score++;
+
+    if (score == 150) { game_speed = 4; Easy_LCD_PrintString(5, 3, "2"); beep(10); }
+    else if (score == 300) { game_speed = 5; Easy_LCD_PrintString(5, 3, "3"); beep(10); }
+    else if (score == 500) { game_speed = 6; Easy_LCD_PrintString(5, 3, "4"); beep(10); }
+
+    if (check_collision()) {
+        is_dead = true;
+        if (score > best_score) best_score = score;
+        Easy_Matrix_Print("DEAD", 1);
+        Easy_LCD_PrintString(0, 3, "OVER: BT0");
+        beep(60);
+    }
+
+    anim_tick++;
+}
+
+static void render(void) {
+    fb_clear();
+
+    fb_line_h(0, SCREEN_W - 1, GROUND_Y, 1);
+    for (int16_t x = 0; x < SCREEN_W; x += 6) {
+        fb_pixel(x + (x % 2), GROUND_Y + 2, 1);
+    }
+
+    draw_cow(COW_X, GROUND_Y - cow_y, is_ducking, anim_tick);
+    draw_obstacle();
+
+    if (is_dead) {
+        fb_fill_rect(44, 18, 40, 16, 1);
+        fb_fill_rect(45, 19, 38, 14, 0);
+        fb_line_h(50, 74, 26, 1);
+    }
+
+    Easy_GLCD_ShowImage(fb);
+
+    Easy_LED7_PrintNum((int32_t)score);
+    Easy_LCD_PrintFormat(7, 1, "%-5d", score);
+    Easy_LCD_PrintFormat(7, 2, "%-5d", best_score);
+    LED32_SetState((uint32_t)(1UL << (score % 32)));
+}
+
+int main(void) {
+    Easy_System_Init();
+    Easy_GLCD_GraphicMode(1);
+
+    reset_game();
+
+    while (1) {
+        Easy_System_Run();
+
+        read_inputs();
+
+        if (is_dead) {
+            if (Button_GetState(BTN_0)) {
+                reset_game();
+            }
+        } else {
+            update_physics();
+            render();
+        }
+    }
+
+    return 0;
+}

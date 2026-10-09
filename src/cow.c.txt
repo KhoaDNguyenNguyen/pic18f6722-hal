@@ -1,0 +1,552 @@
+/**
+ * ============================================================================
+ * FILE:    src/main.c
+ * MÔ TẢ:   BÒ CHIBI SIÊU HỒN NHIÊN: ĂN CỎ LIÊN TỤC - ỈA RẢI RÁC KHẮP NƠI
+ *          - Cỏ mọc um tùm từ các đống phân
+ *          - Bò quay đầu ăn lại cỏ của chính mình và tiếp tục chu kỳ đi ỉa
+ * ============================================================================
+ */
+
+#include "all.h"
+#include <stdlib.h>
+#include <string.h>
+
+#define GLCD_W    128
+#define GLCD_H    64
+#define GROUND_Y  56
+#define MAX_SPOTS 7
+
+static uint8_t fb[1024];
+
+/* ============================================================================
+ * ĐỒ HOẠ CƠ BẢN
+ * ============================================================================ */
+static void FB_Clear(void) {
+    memset(fb, 0, sizeof(fb));
+}
+
+static void FB_SetPixel(int16_t x, int16_t y, uint8_t color) {
+    if (x < 0 || x >= GLCD_W || y < 0 || y >= GLCD_H) return;
+    uint16_t idx = (uint16_t)y * 16 + ((uint16_t)x >> 3);
+    uint8_t mask = (uint8_t)(0x80 >> (x & 7));
+    if (color) fb[idx] |= mask;
+    else        fb[idx] &= ~mask;
+}
+
+static void FB_DrawHLine(int16_t x1, int16_t x2, int16_t y, uint8_t color) {
+    if (y < 0 || y >= GLCD_H) return;
+    if (x1 > x2) { int16_t t = x1; x1 = x2; x2 = t; }
+    if (x1 < 0) x1 = 0;
+    if (x2 >= GLCD_W) x2 = GLCD_W - 1;
+    for (int16_t x = x1; x <= x2; x++) FB_SetPixel(x, y, color);
+}
+
+static void FB_DrawVLine(int16_t x, int16_t y1, int16_t y2, uint8_t color) {
+    if (x < 0 || x >= GLCD_W) return;
+    if (y1 > y2) { int16_t t = y1; y1 = y2; y2 = t; }
+    if (y1 < 0) y1 = 0;
+    if (y2 >= GLCD_H) y2 = GLCD_H - 1;
+    for (int16_t y = y1; y <= y2; y++) FB_SetPixel(x, y, color);
+}
+
+static void FB_FillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t color) {
+    for (int16_t r = y; r < y + h; r++) {
+        FB_DrawHLine(x, x + w - 1, r, color);
+    }
+}
+
+static void FB_PixelRel(int16_t cx, int16_t cy, int16_t dx, int16_t dy, int8_t dir, uint8_t color) {
+    FB_SetPixel(cx + (dx * dir), cy + dy, color);
+}
+
+static void FB_HLineRel(int16_t cx, int16_t cy, int16_t dx1, int16_t dx2, int16_t dy, int8_t dir, uint8_t color) {
+    int16_t x1 = cx + (dx1 * dir);
+    int16_t x2 = cx + (dx2 * dir);
+    FB_DrawHLine(x1, x2, cy + dy, color);
+}
+
+static void FB_FillRectRel(int16_t cx, int16_t cy, int16_t dx, int16_t dy, int16_t w, int16_t h, int8_t dir, uint8_t color) {
+    for (int16_t r = 0; r < h; r++) {
+        FB_HLineRel(cx, cy, dx, dx + w - 1, dy + r, dir, color);
+    }
+}
+
+/* ============================================================================
+ * CẤU TRÚC ĐỒNG CỎ & BÃI PHÂN
+ * ============================================================================ */
+typedef struct {
+    int16_t x;
+    uint8_t has_poop;
+    int16_t grass_h;
+    uint8_t flower;
+    uint8_t stink_tick;
+} EcoSpot_t;
+
+static EcoSpot_t spots[MAX_SPOTS];
+static uint16_t total_poops = 0;
+
+static void InitSpots(void) {
+    // Rải 5 bụi cỏ ban đầu đều khắp màn hình
+    spots[0].x = 18;  spots[0].has_poop = 0; spots[0].grass_h = 6; spots[0].flower = 1; spots[0].stink_tick = 0;
+    spots[1].x = 38;  spots[1].has_poop = 0; spots[1].grass_h = 5; spots[1].flower = 0; spots[1].stink_tick = 0;
+    spots[2].x = 60;  spots[2].has_poop = 0; spots[2].grass_h = 6; spots[2].flower = 1; spots[2].stink_tick = 0;
+    spots[3].x = 82;  spots[3].has_poop = 0; spots[3].grass_h = 5; spots[3].flower = 0; spots[3].stink_tick = 0;
+    spots[4].x = 104; spots[4].has_poop = 0; spots[4].grass_h = 6; spots[4].flower = 1; spots[4].stink_tick = 0;
+    spots[5].x = 0;   spots[5].has_poop = 0; spots[5].grass_h = 0; spots[5].flower = 0; spots[5].stink_tick = 0;
+    spots[6].x = 0;   spots[6].has_poop = 0; spots[6].grass_h = 0; spots[6].flower = 0; spots[6].stink_tick = 0;
+}
+
+static void DrawGrass(int16_t x, int16_t h, uint8_t flower) {
+    if (h <= 0 || x <= 0 || x >= GLCD_W) return;
+    FB_DrawVLine(x, GROUND_Y - h, GROUND_Y, 1);
+    if (h >= 2) {
+        FB_DrawVLine(x - 2, GROUND_Y - (h - 1), GROUND_Y, 1);
+        FB_DrawVLine(x + 2, GROUND_Y - (h - 1), GROUND_Y, 1);
+        FB_SetPixel(x - 3, GROUND_Y - (h - 1), 1);
+        FB_SetPixel(x + 3, GROUND_Y - (h - 1), 1);
+    }
+    if (h >= 4) {
+        FB_DrawVLine(x - 4, GROUND_Y - (h - 2), GROUND_Y, 1);
+        FB_DrawVLine(x + 4, GROUND_Y - (h - 2), GROUND_Y, 1);
+    }
+    // Bông hoa nhỏ xíu nở trên ngọn cỏ
+    if (flower && h >= 5) {
+        FB_SetPixel(x, GROUND_Y - h - 1, 1);
+        FB_SetPixel(x - 1, GROUND_Y - h - 2, 1);
+        FB_SetPixel(x + 1, GROUND_Y - h - 2, 1);
+        FB_SetPixel(x, GROUND_Y - h - 3, 1);
+    }
+}
+
+static void DrawPoop(int16_t x, uint8_t stink) {
+    if (x <= 4 || x >= GLCD_W - 4) return;
+    // Bãi phân xoắn ốc 3 tầng dễ thương
+    FB_DrawHLine(x - 4, x + 4, GROUND_Y, 1);
+    FB_DrawHLine(x - 3, x + 3, GROUND_Y - 1, 1);
+    FB_DrawHLine(x - 2, x + 2, GROUND_Y - 2, 1);
+    FB_DrawHLine(x - 1, x + 1, GROUND_Y - 3, 1);
+    FB_SetPixel(x + 1, GROUND_Y - 4, 1); // Chóp xoắn
+
+    // Khói bốc mùi uốn lượn
+    if (stink) {
+        int16_t off = (stink & 2) ? 1 : 0;
+        FB_SetPixel(x - 2 + off, GROUND_Y - 6, 1);
+        FB_SetPixel(x - 3 + off, GROUND_Y - 7, 1);
+        FB_SetPixel(x + 2 - off, GROUND_Y - 6, 1);
+        FB_SetPixel(x + 3 - off, GROUND_Y - 7, 1);
+    }
+}
+
+/* ============================================================================
+ * CON BÒ CHIBI SIÊU HỒN NHIÊN (CUTE & SMOOTH ANIMATION)
+ * ============================================================================ */
+enum {
+    MOOD_HAPPY = 0, // Đi lại hồn nhiên, nhún nhảy
+    MOOD_EAT,       // Cúi gặm cỏ, mắt tít cười ^^
+    MOOD_POOP,      // Khuỵu chân vểnh đuôi đi ỉa
+    MOOD_SURPRISE   // Quay đầu ngơ ngác ?
+};
+
+static void DrawCuteCow(int16_t cx, int8_t dir, uint8_t walk_frame, uint8_t mood, int16_t poop_drop) {
+    // Nhún nhảy theo nhịp bước chân (bouncy walk)
+    int16_t bob = (mood == MOOD_HAPPY && (walk_frame & 1)) ? -1 : 0;
+    int16_t squat = (mood == MOOD_POOP) ? 2 : 0;
+    int16_t cy = GROUND_Y + squat + bob;
+
+    // 1. THÂN BÒ MẬP TRÒN (BO TRÒN GÓC CHIBI)
+    FB_FillRectRel(cx, cy, -11, -17, 20, 10, dir, 1);
+    FB_PixelRel(cx, cy, -11, -17, dir, 0);
+    FB_PixelRel(cx, cy,   8, -17, dir, 0);
+    FB_PixelRel(cx, cy, -11,  -8, dir, 0);
+    FB_PixelRel(cx, cy,   8,  -8, dir, 0);
+
+    // Các khoang đốm bò sữa đáng yêu
+    FB_FillRectRel(cx, cy, -7, -15, 4, 4, dir, 0);
+    FB_FillRectRel(cx, cy,  1, -12, 4, 3, dir, 0);
+
+    // Bầu vú hồng hào ở bụng
+    FB_FillRectRel(cx, cy, -5, -7, 4, 2, dir, 1);
+    FB_PixelRel(cx, cy, -4, -5, dir, 1);
+    FB_PixelRel(cx, cy, -2, -5, dir, 1);
+
+    // 2. BỐN CHÂN BƯỚC ĐI NHỊP NHÀNG (HOÀN TOÀN HẾT LAG)
+    int16_t leg_base = GROUND_Y;
+    if (mood == MOOD_POOP) {
+        // Khuỵu chân lấy đà rặn ỉa
+        FB_FillRectRel(cx, leg_base, -9, -6, 2, 6, dir, 1);
+        FB_FillRectRel(cx, leg_base, -5, -6, 2, 6, dir, 1);
+        FB_FillRectRel(cx, leg_base,  2, -6, 2, 6, dir, 1);
+        FB_FillRectRel(cx, leg_base,  6, -6, 2, 6, dir, 1);
+    } else if (walk_frame == 0) {
+        // Chân sải bước A
+        FB_FillRectRel(cx, leg_base, -10, -7, 2, 7, dir, 1);
+        FB_FillRectRel(cx, leg_base,  -5, -7, 2, 7, dir, 1);
+        FB_FillRectRel(cx, leg_base,   1, -7, 2, 7, dir, 1);
+        FB_FillRectRel(cx, leg_base,   7, -7, 2, 7, dir, 1);
+    } else {
+        // Chân sải bước B
+        FB_FillRectRel(cx, leg_base,  -8, -7, 2, 7, dir, 1);
+        FB_FillRectRel(cx, leg_base,  -6, -7, 2, 7, dir, 1);
+        FB_FillRectRel(cx, leg_base,   3, -7, 2, 7, dir, 1);
+        FB_FillRectRel(cx, leg_base,   5, -7, 2, 7, dir, 1);
+    }
+    // Móng guốc tiếp đất
+    FB_HLineRel(cx, leg_base, -10, -5, 0, dir, 1);
+    FB_HLineRel(cx, leg_base,   1,  7, 0, dir, 1);
+
+    // 3. ĐUÔI BÒ
+    if (mood == MOOD_POOP) {
+        // ĐUÔI VỂNH NGƯỢC LÊN TRỜI KHI ỈA!
+        FB_PixelRel(cx, cy, -12, -18, dir, 1);
+        FB_PixelRel(cx, cy, -13, -20, dir, 1);
+        FB_PixelRel(cx, cy, -13, -22, dir, 1);
+        FB_PixelRel(cx, cy, -14, -23, dir, 1);
+        FB_PixelRel(cx, cy, -15, -23, dir, 1); // Chùm lông đuôi
+    } else {
+        // Đuôi ngoe nguẩy tung tăng
+        int16_t tw = (walk_frame & 1) ? -1 : 1;
+        FB_PixelRel(cx, cy, -12, -16, dir, 1);
+        FB_PixelRel(cx, cy, -13 + tw, -13, dir, 1);
+        FB_PixelRel(cx, cy, -13 + tw, -11, dir, 1);
+        FB_PixelRel(cx, cy, -14 + tw, -10, dir, 1);
+    }
+
+    // 4. PHÂN ĐANG RƠI (KHI ỈA)
+    if (mood == MOOD_POOP && poop_drop > 0) {
+        int16_t py = cy - 14 + poop_drop;
+        if (py <= GROUND_Y) {
+            FB_FillRectRel(cx, py, -14, 0, 3, 3, dir, 1);
+        }
+    }
+
+    // 5. ĐẦU, MẶT VÀ BIỂU CẢM HỒN NHIÊN
+    if (mood == MOOD_EAT) {
+        // CÚI ĐẦU XUỐNG MẶT ĐẤT ĂN CỎ CỰC THÍCH THÚ
+        FB_FillRectRel(cx, GROUND_Y,  7, -11, 4, 5, dir, 1);
+        FB_FillRectRel(cx, GROUND_Y, 11,  -8, 7, 7, dir, 1);
+        FB_FillRectRel(cx, GROUND_Y, 17,  -5, 4, 5, dir, 1);
+        
+        // Mắt tít lại hình chữ ^^ hạnh phúc
+        FB_PixelRel(cx, GROUND_Y, 13, -6, dir, 0);
+        FB_PixelRel(cx, GROUND_Y, 14, -7, dir, 0);
+        FB_PixelRel(cx, GROUND_Y, 15, -6, dir, 0);
+
+        // Tai vểnh ngang ve vẩy
+        FB_PixelRel(cx, GROUND_Y, 10, -9, dir, 1);
+        FB_PixelRel(cx, GROUND_Y,  9, -9, dir, 1);
+
+        // Vụn cỏ bay tung toé khi nhai chóp chép
+        if (walk_frame) {
+            FB_PixelRel(cx, GROUND_Y, 20, -7, dir, 1);
+            FB_PixelRel(cx, GROUND_Y, 18, -1, dir, 1);
+        }
+    } else {
+        // NGUẨNG CAO ĐẦU NGÁO NGƠ HỒN NHIÊN
+        FB_FillRectRel(cx, cy,  5, -20, 5, 5, dir, 1); // Cổ
+        FB_FillRectRel(cx, cy,  8, -25, 8, 8, dir, 1); // Đầu tròn
+        FB_FillRectRel(cx, cy, 15, -22, 5, 5, dir, 1); // Mõm to
+        FB_PixelRel(cx, cy, 18, -20, dir, 0);          // Lỗ mũi cute
+
+        if (mood == MOOD_POOP) {
+            // Mắt trợn tròn ngơ ngác khi rặn ỉa + Giọt mồ hôi
+            FB_FillRectRel(cx, cy, 11, -23, 3, 3, dir, 0);
+            FB_PixelRel(cx, cy, 12, -22, dir, 1);
+            // Giọt mồ hôi rơi trên trán
+            FB_PixelRel(cx, cy,  9, -26, dir, 1);
+            FB_PixelRel(cx, cy,  8, -25, dir, 1);
+        } else if (mood == MOOD_SURPRISE) {
+            // Mắt ngơ ngác chớp chớp
+            FB_FillRectRel(cx, cy, 11, -23, 3, 3, dir, 0);
+            FB_PixelRel(cx, cy, 11, -22, dir, 1);
+        } else {
+            // Mắt to tròn lấp lánh (anime eyes)
+            FB_FillRectRel(cx, cy, 11, -23, 3, 3, dir, 0);
+            FB_PixelRel(cx, cy, 12, -23, dir, 1);
+            FB_PixelRel(cx, cy, 12, -22, dir, 1);
+            FB_PixelRel(cx, cy, 13, -22, dir, 1); // Điểm sáng con ngươi
+        }
+
+        // Đôi tai xinh xắn
+        FB_PixelRel(cx, cy, 7, -25, dir, 1);
+        FB_PixelRel(cx, cy, 6, -26, dir, 1);
+
+        // Cặp sừng nhỏ cong cong
+        FB_PixelRel(cx, cy, 10, -27, dir, 1);
+        FB_PixelRel(cx, cy, 11, -28, dir, 1);
+        FB_PixelRel(cx, cy, 13, -26, dir, 1);
+
+        // Nốt nhạc vui tươi bay trên đầu khi đang đi tung tăng
+        if (mood == MOOD_HAPPY && (walk_frame & 2)) {
+            FB_SetPixel(cx + (12 * dir), cy - 31, 1);
+            FB_SetPixel(cx + (13 * dir), cy - 31, 1);
+            FB_SetPixel(cx + (13 * dir), cy - 32, 1);
+            FB_SetPixel(cx + (14 * dir), cy - 32, 1);
+        }
+    }
+}
+
+/* ============================================================================
+ * VẼ PHONG CẢNH ĐỒNG QUÊ
+ * ============================================================================ */
+static void RenderWorld(void) {
+    // Mặt đất có điểm cỏ lăn tăn
+    FB_DrawHLine(0, GLCD_W - 1, GROUND_Y, 1);
+    for (int16_t x = 0; x < GLCD_W; x += 5) {
+        FB_SetPixel(x + 2, GROUND_Y + 3, 1);
+    }
+
+    // Mặt trời cười ở góc trời
+    FB_DrawHLine(5, 11, 4, 1);
+    FB_DrawHLine(3, 13, 5, 1);
+    FB_DrawHLine(3, 13, 6, 1);
+    FB_DrawHLine(5, 11, 7, 1);
+    FB_SetPixel(8, 1, 1); FB_SetPixel(8, 10, 1);
+    FB_SetPixel(1, 5, 1); FB_SetPixel(15, 5, 1);
+
+    // Mây trôi êm đềm
+    FB_DrawHLine(72, 86, 7, 1);
+    FB_DrawHLine(69, 89, 8, 1);
+    FB_DrawHLine(71, 87, 9, 1);
+
+    // Vẽ tất cả cỏ và phân đang có trên đồng
+    for (uint8_t i = 0; i < MAX_SPOTS; i++) {
+        if (spots[i].x > 0) {
+            if (spots[i].has_poop) {
+                DrawPoop(spots[i].x, spots[i].stink_tick);
+            }
+            if (spots[i].grass_h > 0) {
+                DrawGrass(spots[i].x, spots[i].grass_h, spots[i].flower);
+            }
+        }
+    }
+}
+
+/* ============================================================================
+ * NGOẠI VI & ÂM THANH VUI NHỘN
+ * ============================================================================ */
+static void SoundChew(void) {
+    Buzzer_Set(1);
+    __delay_us(450);
+    Buzzer_Set(0);
+}
+
+static void SoundPhet(void) {
+    // Tiếng rặn "Toot... PHẸT!" tếu táo
+    for (uint8_t i = 0; i < 18; i++) {
+        Buzzer_Set(1);
+        __delay_ms(2);
+        Buzzer_Set(0);
+        __delay_ms(3);
+    }
+    Buzzer_Set(1);
+    __delay_ms(15);
+    Buzzer_Set(0);
+}
+
+static void SyncDashboard(int16_t cow_x, const char* state_str) {
+    int16_t led_idx = (cow_x * 31) / 115;
+    if (led_idx < 0) led_idx = 0;
+    if (led_idx > 31) led_idx = 31;
+    LED32_SetState(1UL << led_idx);
+
+    Easy_LED7_PrintNum(total_poops);
+
+    Easy_LCD_PrintFormat(0, 0, "CON BO DI IA :)) ");
+    Easy_LCD_PrintFormat(0, 1, "STATUS: %-12s", state_str);
+    Easy_LCD_PrintFormat(0, 2, "TOA DO: X=%-3d      ", cow_x);
+    Easy_LCD_PrintFormat(0, 3, "TONG CUC PHAN: %-2d ", total_poops);
+}
+
+/* Thêm bãi phân mới vào spot trống */
+static void RecordPoop(int16_t px) {
+    for (uint8_t i = 0; i < MAX_SPOTS; i++) {
+        if (spots[i].x == 0 || (!spots[i].has_poop && spots[i].grass_h == 0)) {
+            spots[i].x = px;
+            spots[i].has_poop = 1;
+            spots[i].grass_h = 0;
+            spots[i].flower = 0;
+            spots[i].stink_tick = 3;
+            total_poops++;
+            return;
+        }
+    }
+}
+
+/* Bò dừng lại nhai sạch một bụi cỏ */
+static void CowEatSpot(int16_t cow_x, int8_t dir, uint8_t s_idx) {
+    SyncDashboard(cow_x, "AN CO NGON ^^");
+    Easy_Matrix_Print("YUM", 2);
+
+    while (spots[s_idx].grass_h > 0) {
+        for (uint8_t f = 0; f < 3; f++) {
+            FB_Clear();
+            RenderWorld();
+            DrawCuteCow(cow_x, dir, (f & 1), MOOD_EAT, 0);
+            Easy_GLCD_ShowImage(fb);
+            SoundChew();
+            __delay_ms(55);
+        }
+        spots[s_idx].grass_h -= 2;
+    }
+    spots[s_idx].has_poop = 0; // Ăn sạch cả cỏ lẫn bãi phân cũ
+}
+
+/* Bò dừng lại khuỵu chân vểnh đuôi ỉa ("PHẸT!") */
+static void CowPoopSpot(int16_t cow_x, int8_t dir) {
+    int16_t px = (dir == 1) ? (cow_x - 14) : (cow_x + 14);
+    SyncDashboard(cow_x, "DANG PHET !!");
+    Easy_Matrix_Print("POOP", 1);
+
+    for (int16_t drop = 2; drop <= 14; drop += 2) {
+        FB_Clear();
+        RenderWorld();
+        DrawCuteCow(cow_x, dir, 0, MOOD_POOP, drop);
+        
+        // Chữ PHẸT! nhảy tưng tưng ngộ nghĩnh
+        FB_DrawHLine(cow_x - (26 * dir), cow_x - (16 * dir), GROUND_Y - 26, 1);
+        FB_SetPixel(cow_x - (21 * dir), GROUND_Y - 28, 1);
+        FB_SetPixel(cow_x - (21 * dir), GROUND_Y - 25, 1);
+        
+        Easy_GLCD_ShowImage(fb);
+        if (drop == 6) SoundPhet();
+        __delay_ms(50);
+    }
+
+    RecordPoop(px);
+
+    // Đứng thở phào nhẹ nhõm sau khi ỉa
+    for (uint8_t w = 0; w < 4; w++) {
+        FB_Clear();
+        RenderWorld();
+        DrawCuteCow(cow_x, dir, 0, MOOD_POOP, 14);
+        Easy_GLCD_ShowImage(fb);
+        __delay_ms(60);
+    }
+}
+
+/* Cỏ mọc um tùm tươi tốt từ tất cả các bãi phân */
+static void SproutGrassOnAllPoops(void) {
+    SyncDashboard(0, "CO MOC TU PHAN");
+    Easy_Matrix_Print("GROW", 3);
+
+    for (uint8_t step = 1; step <= 6; step++) {
+        for (uint8_t i = 0; i < MAX_SPOTS; i++) {
+            if (spots[i].x > 0 && spots[i].has_poop && spots[i].grass_h < step) {
+                spots[i].grass_h = step;
+                if (step >= 5) spots[i].flower = 1;
+            }
+        }
+        FB_Clear();
+        RenderWorld();
+        Easy_GLCD_ShowImage(fb);
+        __delay_ms(120);
+    }
+}
+
+/* ============================================================================
+ * VÒNG LẶP CHÍNH
+ * ============================================================================ */
+int main(void) {
+    Easy_System_Init();
+    Easy_GLCD_GraphicMode(1);
+
+    while (1) {
+        InitSpots();
+        int16_t cow_x = -20;
+        uint8_t walk = 0;
+
+        /* --------------------------------------------------------------------
+         * GIAI ĐOẠN 1: BÒ ĐI SANG PHẢI -> ĂN CỎ & LIÊN TỤC ỈA 3 BÃI PHÂN!
+         * -------------------------------------------------------------------- */
+        while (cow_x < 108) {
+            cow_x += 2;
+            walk++;
+
+            // Kiểm tra xem đầu bò có chạm bụi cỏ nào không
+            int16_t mouth_x = cow_x + 16;
+            for (uint8_t i = 0; i < MAX_SPOTS; i++) {
+                if (spots[i].x > 0 && spots[i].grass_h > 0 && abs(spots[i].x - mouth_x) <= 3) {
+                    CowEatSpot(cow_x, 1, i);
+                    break;
+                }
+            }
+
+            // ỈA RẢI RÁC 3 LẦN TẠI X = 32, X = 68, VÀ X = 96!
+            if (cow_x == 32 || cow_x == 68 || cow_x == 96) {
+                CowPoopSpot(cow_x, 1);
+            }
+
+            FB_Clear();
+            RenderWorld();
+            DrawCuteCow(cow_x, 1, (walk & 1), MOOD_HAPPY, 0);
+            Easy_GLCD_ShowImage(fb);
+            SyncDashboard(cow_x, "DI TUNG TANG");
+            __delay_ms(35);
+        }
+
+        /* --------------------------------------------------------------------
+         * GIAI ĐOẠN 2: CỎ MỌC NGAY TRÊN 3 BÃI PHÂN VỪA ỈA
+         * -------------------------------------------------------------------- */
+        SproutGrassOnAllPoops();
+        __delay_ms(400);
+
+        /* --------------------------------------------------------------------
+         * GIAI ĐOẠN 3: HẾT ĐƯỜNG -> BÒ NGƠ NGÁC '?' VÀ QUAY ĐẦU (180 ĐỘ)
+         * -------------------------------------------------------------------- */
+        SyncDashboard(cow_x, "ỦA QUAY ĐẦU ?");
+        Easy_Matrix_Print("TURN", 3);
+        for (uint8_t q = 0; q < 8; q++) {
+            FB_Clear();
+            RenderWorld();
+            DrawCuteCow(cow_x, 1, 0, MOOD_SURPRISE, 0);
+            // Vẽ dấu chấm hỏi '?' to trên đầu
+            FB_SetPixel(cow_x + 13, GROUND_Y - 32, 1);
+            FB_SetPixel(cow_x + 14, GROUND_Y - 33, 1);
+            FB_SetPixel(cow_x + 12, GROUND_Y - 33, 1);
+            FB_SetPixel(cow_x + 13, GROUND_Y - 30, 1);
+            FB_SetPixel(cow_x + 13, GROUND_Y - 28, 1);
+            Easy_GLCD_ShowImage(fb);
+            __delay_ms(80);
+        }
+
+        /* --------------------------------------------------------------------
+         * GIAI ĐOẠN 4: BÒ QUAY VỀ BÊN TRÁI -> ĂN LẠI CỎ VỪA MỌC VÀ ỈA TIẾP 2 BÃI!
+         * -------------------------------------------------------------------- */
+        while (cow_x > -20) {
+            cow_x -= 2;
+            walk++;
+
+            // Kiểm tra mõm bò hướng trái có chạm bụi cỏ không
+            int16_t mouth_x_left = cow_x - 16;
+            for (uint8_t i = 0; i < MAX_SPOTS; i++) {
+                if (spots[i].x > 0 && spots[i].grass_h > 0 && abs(spots[i].x - mouth_x_left) <= 3) {
+                    CowEatSpot(cow_x, -1, i);
+                    break;
+                }
+            }
+
+            // ĂN NO RỒI LẠI TIẾP TỤC ỈA THÊM 2 BÃI NỮA Ở X = 80 VÀ X = 42!
+            if (cow_x == 80 || cow_x == 42) {
+                CowPoopSpot(cow_x, -1);
+            }
+
+            FB_Clear();
+            RenderWorld();
+            DrawCuteCow(cow_x, -1, (walk & 1), MOOD_HAPPY, 0);
+            Easy_GLCD_ShowImage(fb);
+            SyncDashboard(cow_x, "QUAY VE AN CO");
+            __delay_ms(35);
+        }
+
+        /* --------------------------------------------------------------------
+         * GIAI ĐOẠN 5: CỎ LẠI MỌC TIẾP TRÊN PHÂN MỚI -> VÒNG TUẦN HOÀN BẤT TẬN
+         * -------------------------------------------------------------------- */
+        SproutGrassOnAllPoops();
+        __delay_ms(600);
+    }
+
+    return 0;
+}
+
+
+

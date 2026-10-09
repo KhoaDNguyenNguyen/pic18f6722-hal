@@ -1,0 +1,301 @@
+#include "all.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define SCREEN_W    128
+#define SCREEN_H    64
+#define GROUND_Y    50
+
+#define DINO_X      16
+#define DINO_W      10
+#define DINO_H      14
+#define DINO_DUCK_H 8
+
+#define OBSTACLE_NONE   0
+#define OBSTACLE_CACTUS 1
+#define OBSTACLE_BIRD   2
+
+typedef struct {
+    int16_t x;
+    int16_t y;
+    uint8_t type;
+    uint8_t w;
+    uint8_t h;
+    bool active;
+} Obstacle_t;
+
+static uint8_t fb[1024];
+
+static int16_t dino_y = 0;
+static int16_t dino_vy = 0;
+static bool is_ducking = false;
+static bool on_ground = true;
+static uint8_t leg_tick = 0;
+
+static Obstacle_t obs;
+static uint16_t score = 0;
+static uint16_t high_score = 0;
+static bool is_dead = false;
+static uint8_t speed = 3;
+
+static void fb_clear(void) {
+    memset(fb, 0, sizeof(fb));
+}
+
+static void fb_pixel(int16_t x, int16_t y, uint8_t c) {
+    if (x < 0 || x >= SCREEN_W || y < 0 || y >= SCREEN_H) return;
+    uint16_t idx = (uint16_t)y * 16 + ((uint16_t)x >> 3);
+    uint8_t mask = (uint8_t)(0x80 >> (x & 7));
+    if (c) fb[idx] |= mask;
+    else   fb[idx] &= ~mask;
+}
+
+static void fb_line_h(int16_t x1, int16_t x2, int16_t y, uint8_t c) {
+    if (y < 0 || y >= SCREEN_H) return;
+    if (x1 > x2) { int16_t t = x1; x1 = x2; x2 = t; }
+    if (x1 < 0) x1 = 0;
+    if (x2 >= SCREEN_W) x2 = SCREEN_W - 1;
+    for (int16_t x = x1; x <= x2; x++) fb_pixel(x, y, c);
+}
+
+static void fb_line_v(int16_t x, int16_t y1, int16_t y2, uint8_t c) {
+    if (x < 0 || x >= SCREEN_W) return;
+    if (y1 > y2) { int16_t t = y1; y1 = y2; y2 = t; }
+    if (y1 < 0) y1 = 0;
+    if (y2 >= SCREEN_H) y2 = SCREEN_H - 1;
+    for (int16_t y = y1; y <= y2; y++) fb_pixel(x, y, c);
+}
+
+static void fb_fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t c) {
+    for (int16_t r = y; r < y + h; r++) {
+        fb_line_h(x, x + w - 1, r, c);
+    }
+}
+
+static void beep(uint8_t ms) {
+    Buzzer_Set(true);
+    for (uint8_t i = 0; i < ms; i++) {
+        __delay_ms(1);
+    }
+    Buzzer_Set(false);
+}
+
+static void spawn_obstacle(void) {
+    obs.x = 128 + (int16_t)(rand() % 30);
+    obs.active = true;
+
+    if (score > 100 && (rand() % 3 == 0)) {
+        obs.type = OBSTACLE_BIRD;
+        obs.w = 9;
+        obs.h = 6;
+        obs.y = GROUND_Y - 10;
+    } else {
+        obs.type = OBSTACLE_CACTUS;
+        obs.w = 6;
+        obs.h = 12;
+        obs.y = GROUND_Y - obs.h;
+    }
+}
+
+static void reset_game(void) {
+    dino_y = 0;
+    dino_vy = 0;
+    is_ducking = false;
+    on_ground = true;
+    score = 0;
+    speed = 3;
+    is_dead = false;
+
+    spawn_obstacle();
+
+    Easy_Matrix_Print("RUN", 2);
+    Easy_LCD_ClearLine(0);
+    Easy_LCD_ClearLine(1);
+    Easy_LCD_ClearLine(2);
+    Easy_LCD_ClearLine(3);
+    Easy_LCD_PrintString(0, 0, "DINO");
+    Easy_LCD_PrintFormat(0, 1, "SCORE: %d", score);
+    Easy_LCD_PrintFormat(0, 2, "HIGH:  %d", high_score);
+    Easy_LCD_PrintString(0, 3, "BT0: JUMP");
+}
+
+static void draw_dino(int16_t base_x, int16_t base_y, bool duck, uint8_t step) {
+    if (duck && on_ground) {
+        fb_fill_rect(base_x, base_y - DINO_DUCK_H, 12, 6, 1);
+        fb_fill_rect(base_x + 9, base_y - DINO_DUCK_H - 2, 5, 4, 1);
+        fb_pixel(base_x + 12, base_y - DINO_DUCK_H - 1, 0);
+        if (step & 1) {
+            fb_line_h(base_x + 2, base_x + 5, base_y - 1, 1);
+        } else {
+            fb_line_h(base_x + 6, base_x + 9, base_y - 1, 1);
+        }
+    } else {
+        int16_t top_y = base_y - DINO_H;
+        fb_fill_rect(base_x + 2, top_y + 4, 6, 6, 1);
+        fb_fill_rect(base_x + 4, top_y, 6, 4, 1);
+        fb_pixel(base_x + 8, top_y + 1, 0);
+        fb_pixel(base_x, top_y + 6, 1);
+        fb_line_h(base_x + 7, base_x + 8, top_y + 7, 1);
+
+        if (on_ground) {
+            if (step & 1) {
+                fb_line_v(base_x + 3, top_y + 10, base_y - 1, 1);
+                fb_line_v(base_x + 6, top_y + 10, base_y - 3, 1);
+            } else {
+                fb_line_v(base_x + 3, top_y + 10, base_y - 3, 1);
+                fb_line_v(base_x + 6, top_y + 10, base_y - 1, 1);
+            }
+        } else {
+            fb_line_v(base_x + 3, top_y + 10, base_y - 3, 1);
+            fb_line_v(base_x + 6, top_y + 10, base_y - 3, 1);
+        }
+    }
+}
+
+static void draw_obstacle(void) {
+    if (!obs.active) return;
+
+    if (obs.type == OBSTACLE_CACTUS) {
+        fb_fill_rect(obs.x + 2, obs.y, 2, obs.h, 1);
+        fb_line_v(obs.x, obs.y + 3, obs.y + 7, 1);
+        fb_line_h(obs.x, obs.x + 2, obs.y + 7, 1);
+        fb_line_v(obs.x + 4, obs.y + 2, obs.y + 6, 1);
+        fb_line_h(obs.x + 2, obs.x + 4, obs.y + 6, 1);
+    } else if (obs.type == OBSTACLE_BIRD) {
+        fb_fill_rect(obs.x + 2, obs.y + 2, 5, 2, 1);
+        fb_pixel(obs.x, obs.y + 3, 1);
+        fb_pixel(obs.x + 1, obs.y + 3, 1);
+        fb_pixel(obs.x + 3, obs.y + 2, 0);
+        if (leg_tick & 1) {
+            fb_line_v(obs.x + 4, obs.y, obs.y + 2, 1);
+        } else {
+            fb_line_v(obs.x + 4, obs.y + 3, obs.y + 5, 1);
+        }
+    }
+}
+
+static bool check_collision(void) {
+    if (!obs.active) return false;
+
+    int16_t d_x = DINO_X;
+    int16_t d_y = GROUND_Y - dino_y;
+    int16_t d_w = (is_ducking && on_ground) ? 14 : DINO_W;
+    int16_t d_h = (is_ducking && on_ground) ? DINO_DUCK_H : DINO_H;
+    int16_t d_top = d_y - d_h;
+
+    int16_t o_left = obs.x;
+    int16_t o_right = obs.x + obs.w;
+    int16_t o_top = obs.y;
+    int16_t o_bottom = obs.y + obs.h;
+
+    if ((d_x + d_w > o_left) && (d_x < o_right)) {
+        if ((d_y > o_top) && (d_top < o_bottom)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void read_inputs(void) {
+    bool btn_jump = Button_GetState(BTN_0);
+    bool btn_duck = Button_GetState(BTN_1);
+
+    uint16_t jy = Easy_ADC_ReadRaw(ADC_CH_JOY_Y, 1);
+
+    bool joy_jump = (jy < 300);
+    bool joy_duck = (jy > 700);
+
+    if ((btn_jump || joy_jump) && on_ground) {
+        dino_vy = 6;
+        on_ground = false;
+        beep(5);
+    }
+
+    is_ducking = (btn_duck || joy_duck);
+}
+
+static void update_physics(void) {
+    if (!on_ground) {
+        dino_y += dino_vy;
+        dino_vy -= 1;
+        if (dino_y <= 0) {
+            dino_y = 0;
+            dino_vy = 0;
+            on_ground = true;
+        }
+    }
+
+    obs.x -= speed;
+    if (obs.x < -15) {
+        spawn_obstacle();
+    }
+
+    score++;
+    if (score % 250 == 0 && speed < 6) {
+        speed++;
+        beep(15);
+    }
+
+    if (check_collision()) {
+        is_dead = true;
+        if (score > high_score) {
+            high_score = score;
+        }
+        Easy_Matrix_Print("DEAD", 1);
+        Easy_LCD_PrintString(0, 3, "DEAD: BT0 RESTART   ");
+        beep(50);
+    }
+
+    leg_tick++;
+}
+
+static void render(void) {
+    fb_clear();
+
+    fb_line_h(0, SCREEN_W - 1, GROUND_Y, 1);
+    for (int16_t x = 0; x < SCREEN_W; x += 8) {
+        fb_pixel(x + (x % 3), GROUND_Y + 2, 1);
+    }
+
+    draw_dino(DINO_X, GROUND_Y - dino_y, is_ducking, leg_tick);
+    draw_obstacle();
+
+    if (is_dead) {
+        fb_fill_rect(44, 20, 40, 16, 1);
+        fb_fill_rect(45, 21, 38, 14, 0);
+        fb_line_h(50, 74, 28, 1);
+    }
+
+    Easy_GLCD_ShowImage(fb);
+
+    Easy_LED7_PrintNum((int32_t)score);
+    Easy_LCD_PrintFormat(7, 1, "%d   ", score);
+    Easy_LCD_PrintFormat(7, 2, "%d   ", high_score);
+    LED32_SetState((uint32_t)(1UL << (score % 32)));
+}
+
+int main(void) {
+    Easy_System_Init();
+    Easy_GLCD_GraphicMode(1);
+
+    reset_game();
+
+    while (1) {
+        Easy_System_Run();
+
+        read_inputs();
+
+        if (is_dead) {
+            if (Button_GetState(BTN_0)) {
+                reset_game();
+            }
+        } else {
+            update_physics();
+            render();
+        }
+    }
+
+    return 0;
+}
