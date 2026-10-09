@@ -4,7 +4,7 @@
 
 static uint16_t actuator_reg = 0;
 
-static void Actuator_Update(void) {
+void Actuator_Update(void) {
 #ifdef TARGET_SIMULATION
     BUZZER_PIN = (actuator_reg & (1U << 13)) ? 1 : 0;
     RELAY_PIN = (actuator_reg & (1U << 14)) ? 1 : 0;
@@ -16,9 +16,14 @@ static void Actuator_Update(void) {
 #endif
 }
 
-static void Actuator_SetBit(uint8_t bit_pos, bool state) {
+void Actuator_SetBit(uint8_t bit_pos, bool state) {
     if (state) actuator_reg |= (1U << bit_pos);
     else       actuator_reg &= ~(1U << bit_pos);
+    Actuator_Update();
+}
+
+void Actuator_SetMask(uint16_t mask, uint16_t val) {
+    actuator_reg = (actuator_reg & ~mask) | (val & mask);
     Actuator_Update();
 }
 
