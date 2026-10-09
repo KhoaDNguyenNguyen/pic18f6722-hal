@@ -29,4 +29,8 @@
 #include "easy_actuator.h"
 #include "easy_rtc.h"
 #include "easy_oled.h"
+#include "easy_adc.h"
+#include "easy_distance.h"
+#include "easy_dht.h"     
+#include "easy_weight.h"  
 #endif
